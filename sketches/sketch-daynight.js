@@ -14,9 +14,79 @@ const params = {
   animate: true,
 };
 
-let cx = 0;
-let cy = 0;
-let ct = 0;
+let cx = 0; // spin point x
+let cy = 0; // spin point y
+let ct = 0; // current time
+
+let skyWidth = params.timeLimit * 10;
+let skyHeight = 20;
+
+const generateSky = () => {
+  // Create 2 gradients
+  // first - top colors
+  // second - bottom colors
+  // Spread from 0 to 1 counting smaller interval for dusk/sunset and dawn/sunrise
+  const skyCanvas = document.createElement('canvas');
+  const skyContext = skyCanvas.getContext('2d', { willReadFrequently: true });
+  const skyTop = skyContext.createLinearGradient(0, 0, skyWidth, 10);
+  const skyBottom = skyContext.createLinearGradient(0, 0, skyWidth, 10);
+  // Day times
+  // Night   22:00...4:59  Dark    0  0     0
+  // Morning 5:00...11:59  Sunrise 5  10
+  // Day     12:00...16:59 Light   12 14:30
+  // Evening 17:00...21:59 Sunset  17 19:30
+
+  // Colors of the sky
+  // Dawn '#5e4e82, '#be8782'
+  // Sunrise '#5b8ed7', '#ebd883'
+  // Morning '#60a5f3', '#94ccfc'
+  // Afternoon '#3f85d8', '#94ccfc'
+  // Sunset '#7c527e', '#eea334'
+  // Dusk '#353d82', '#e38341'
+  // Night '#0a1427', '#1d4173'
+
+  const topColors = [[0, '#0a1427'], // Night
+                     [5, '#0a1427'], // Night
+                     [7, '#5b8ed7'], // Sunrise
+                     [9, '#3f85d8'], // Day
+                     [17, '#3f85d8'], // Day
+                     [18, '#7c527e'], // Sunset
+                     [19, '#0a1427'], // Night
+                     [24, '#0a1427']]; // Night
+  const bottomColors = [[0, '#1d4173'],
+                       [5, '#1d4173'],
+                       [7, '#ebd883'],
+                       [9, '#94ccfc'],
+                       [17, '#94ccfc'],
+                       [18, '#eea334'],
+                       [19, '#1d4173'],
+                       [24, '#1d4173']];
+  topColors.forEach(element => {
+    const coord = math.mapRange(element[0], 0, 24, 0, 1);
+    skyTop.addColorStop(coord, element[1]);    
+  });
+  bottomColors.forEach(element => {
+    const coord = math.mapRange(element[0], 0, 24, 0, 1);
+    skyBottom.addColorStop(coord, element[1]);    
+  });
+  skyBottom.addColorStop(0, '#1d4173');
+
+  skyContext.fillStyle = skyTop;
+  skyContext.fillRect(0, 0, skyWidth, 10);
+  skyContext.fillStyle = skyBottom;
+  skyContext.fillRect(0, 10, skyWidth, 10);
+  let image = new Image();
+  image.src = skyCanvas.toDataURL();
+  return image;
+};
+
+let skyImage = generateSky();
+var skyCanvas = document.createElement("canvas");
+skyCanvas.width = skyWidth;
+skyCanvas.height = skyHeight;
+var skyContext = skyCanvas.getContext("2d");
+skyContext.drawImage(skyImage, 0, 0);
+const skyData = skyContext.getImageData(0, 0, skyWidth, skyHeight).data;
 
 const sketch = ({ context: ctx, width, height }) => {
   cx = width * 0.5;
@@ -39,7 +109,7 @@ const sketch = ({ context: ctx, width, height }) => {
     drawSky(ctx, ct, width, height);
     drawLight(ctx, ct);
     drawSea(ctx, ct);
-    drawLand(ctx, ct);
+    drawLand(ctx, ct, width, height);
     drawDebugData(ctx, ct, width, height);
   };
 };
@@ -47,12 +117,22 @@ const sketch = ({ context: ctx, width, height }) => {
 const drawSky = (ctx, time, width, height) => {
   ctx.save();
   ctx.translate(0, cy); // Horizont
-  // ctx.fillStyle = '#FEFCD7';
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, -cy);
-  skyGrad.addColorStop(0, 'blue');
-  skyGrad.addColorStop(1, 'black');
-  ctx.fillStyle = skyGrad;
+  ctx.fillStyle = '#1d4173';
   ctx.fillRect(0, 0, width, -cy);
+  
+  const x = Math.round(math.mapRange(time, 0, params.timeLimit, 0, skyWidth));
+  const shiftTop = x * 4;
+  const shiftBottom = (skyWidth * 11 + x) * 4;
+
+  const colorTop = `rgb(${skyData[shiftTop]}, ${skyData[shiftTop + 1]}, ${skyData[shiftTop + 2]})`;
+  const colorBottom = `rgb(${skyData[shiftBottom]}, ${skyData[shiftBottom + 1]}, ${skyData[shiftBottom + 2]})`;
+
+  const skyColor = ctx.createLinearGradient(0, 0, 0, -cy);
+  skyColor.addColorStop(1, colorTop);
+  skyColor.addColorStop(0, colorBottom);
+  ctx.fillStyle = skyColor;
+  ctx.fillRect(0, 0, width, -cy);
+
   ctx.restore();
 };
 
@@ -91,8 +171,12 @@ const drawSea = (ctx, time) => {
 
 };
 
-const drawLand = (ctx, time) => {
-
+const drawLand = (ctx, time, width, height) => {
+  ctx.save();
+  ctx.translate(0, cy); // Horizont
+  ctx.fillStyle = 'green';
+  ctx.fillRect(0, 0, width, cy);
+  ctx.restore();
 };
 
 const drawDebugData = (ctx, time, width, height) => {
@@ -103,14 +187,25 @@ const drawDebugData = (ctx, time, width, height) => {
   ctx.fillText(`Time: ${Math.round(time)}`, 20, 30);
   ctx.fill();
 
+  // ctx.strokeStyle = 'green';
+  // ctx.lineWidth = 3;
+  // ctx.moveTo(0, cy);
+  // ctx.lineTo(width, cy);
+  // ctx.moveTo(cx, 0);
+  // ctx.lineTo(cx, height);
+  // ctx.stroke();
+  // ctx.restore();
+
+  ctx.drawImage(skyImage, 10, 50);
+
+  const x = Math.round(math.mapRange(time, 0, params.timeLimit, 0, skyWidth));
+  const shiftTop = x * 4;
+  const shiftBottom = (skyWidth * 11 + x) * 4;
+  ctx.beginPath();
   ctx.strokeStyle = 'green';
   ctx.lineWidth = 3;
-  ctx.moveTo(0, cy);
-  ctx.lineTo(width, cy);
-  ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, height);
+  ctx.rect(10 + x, 50, 5, 20);
   ctx.stroke();
-  ctx.restore();
 };
 
 const createPane = () => {
