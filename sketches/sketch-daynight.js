@@ -230,12 +230,10 @@ const drawLand = (ctx, time, width, height) => {
   ctx.translate(0, cy);
   ctx.translate(0, -skylineStep);
   ctx.fillStyle = skylineGrad;
-  let opacity = math.mapRange(skylineStep, 0, skylineInterval, 0, 1);
-  ctx.globalAlpha = opacity;
+  ctx.globalAlpha = math.mapRange(skylineStep, 0, skylineInterval, 0, 1);
   drawSkyline(ctx, skylines[0]);
   ctx.restore();
-
-
+  
   ctx.save();
   ctx.translate(0, cy); // Horizont
   ctx.fillStyle = 'green';
