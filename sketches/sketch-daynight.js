@@ -1,5 +1,6 @@
 const canvasSketch = require('canvas-sketch');
 const math = require('canvas-sketch-util/math');
+const random = require('canvas-sketch-util/random');
 const Tweakpane = require('tweakpane');
 
 const settings = {
@@ -8,7 +9,7 @@ const settings = {
 };
 
 const params = {
-  time: 0,
+  time: 7,
   timeAcceleration: 0.05,
   timeLimit: 20,
   animate: true,
@@ -21,7 +22,11 @@ let ct = 0; // current time
 let skyWidth = params.timeLimit * 10;
 let skyHeight = 20;
 
-const generateSky = () => {
+let skylineInterval = 70;
+let skylineStep = 0;
+let skylines = [];
+
+const generateSkyImage = () => {
   // Create 2 gradients
   // first - top colors
   // second - bottom colors
@@ -80,18 +85,19 @@ const generateSky = () => {
   return image;
 };
 
-let skyImage = generateSky();
-var skyCanvas = document.createElement("canvas");
-skyCanvas.width = skyWidth;
-skyCanvas.height = skyHeight;
-var skyContext = skyCanvas.getContext("2d");
-skyContext.drawImage(skyImage, 0, 0);
-const skyData = skyContext.getImageData(0, 0, skyWidth, skyHeight).data;
+const getSkyData = (skyImage) => {
+  const skyCanvas = document.createElement("canvas");
+  skyCanvas.width = skyWidth;
+  skyCanvas.height = skyHeight;
+  const skyContext = skyCanvas.getContext("2d");
+  skyContext.drawImage(skyImage, 0, 0);
+  return skyContext.getImageData(0, 0, skyWidth, skyHeight).data;
+};
 
 const sketch = ({ context: ctx, width, height }) => {
   cx = width * 0.5;
   cy = height * 0.5;
-
+  
   return ({ context: ctx, width, height }) => {
     if (params.animate) {
       ct += params.timeAcceleration;
@@ -114,6 +120,8 @@ const sketch = ({ context: ctx, width, height }) => {
   };
 };
 
+const skyImage = generateSkyImage();
+const skyData = getSkyData(skyImage);
 const drawSky = (ctx, time, width, height) => {
   ctx.save();
   ctx.translate(0, cy); // Horizont
@@ -171,11 +179,78 @@ const drawSea = (ctx, time) => {
 
 };
 
+const generateSkyline = (width, height) => {
+  // Generate mountains
+  let nodes = [[0.0, 0.0]];
+  let stepsCount = random.range(10, 15);
+  let step = width / (stepsCount + 2);
+  for (let index = 1; index <= stepsCount; index++) {
+    let x = step * index;
+    // let y = random.noise1D(index); // get value
+    let y = random.gaussian();
+    y *= 85; // add amplitude
+    y = y - (Math.sqrt(width * 0.5 * width * 0.5 - (x - width * 0.5) * (x - width * 0.5))) * 0.5; // correct height to be higher closer to center
+    y = y * -Math.sign(y);
+    nodes.push([x, y]);
+  }
+  nodes.push([width, 0.0]);
+  return nodes;
+};
+
+const drawSkyline = (ctx, skyline) => {
+  ctx.translate(0, skylineInterval);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  for (let i = 0; i < skyline.length; i++) {
+    const element = skyline[i];
+    ctx.lineTo(element[0], element[1]);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 const drawLand = (ctx, time, width, height) => {
+  let skylineGrad = ctx.createLinearGradient(0, 0, 0, -300);
+  skylineGrad.addColorStop(0, '#bbd3de');
+  skylineGrad.addColorStop(1, '#487da7');
+
+  if (skylines.length == 0) {
+    skylines = [...Array(10)].map(() => {
+      return generateSkyline(width, height);
+    });
+  }
+  skylineStep += 1;
+  if (skylineStep >= skylineInterval) {
+    skylines.unshift(generateSkyline(width, height));
+    skylineStep = 0;
+  }
+
+  ctx.save();
+  ctx.translate(0, cy);
+  ctx.translate(0, -skylineStep);
+  ctx.fillStyle = skylineGrad;
+  let opacity = math.mapRange(skylineStep, 0, skylineInterval, 0, 1);
+  ctx.globalAlpha = opacity;
+  drawSkyline(ctx, skylines[0]);
+  ctx.restore();
+
+
   ctx.save();
   ctx.translate(0, cy); // Horizont
   ctx.fillStyle = 'green';
   ctx.fillRect(0, 0, width, cy);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(0, cy - skylineInterval);
+  ctx.translate(0, skylineStep);
+  ctx.fillStyle = skylineGrad;
+  for (let sl = 1; sl < skylines.length; sl++) {
+    ctx.globalAlpha = 1;
+    const skyline = skylines[sl];
+    drawSkyline(ctx, skyline);
+    }
   ctx.restore();
 };
 
