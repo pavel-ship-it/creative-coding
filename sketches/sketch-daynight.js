@@ -12,6 +12,8 @@ const params = {
   time: 7,
   timeAcceleration: 0.05,
   timeLimit: 20,
+  skylineInterval: 200,
+  skylineSpeed: 20,
   animate: true,
 };
 
@@ -22,9 +24,9 @@ let ct = 0; // current time
 let skyWidth = params.timeLimit * 10;
 let skyHeight = 20;
 
-let skylineInterval = 70;
 let skylineStep = 0;
 let skylines = [];
+let skylinesCount = 6;
 
 const generateSkyImage = () => {
   // Create 2 gradients
@@ -97,7 +99,11 @@ const getSkyData = (skyImage) => {
 const sketch = ({ context: ctx, width, height }) => {
   cx = width * 0.5;
   cy = height * 0.5;
-  
+
+  skylines = [...Array(10)].map(() => {
+    return generateSkyline(width, height);
+  });
+
   return ({ context: ctx, width, height }) => {
     if (params.animate) {
       ct += params.timeAcceleration;
@@ -179,59 +185,51 @@ const drawSea = (ctx, time) => {
 
 };
 
+const drawSkyline = (ctx, skyline, addAlpha) => {
+  ctx.translate(0, params.skylineInterval);
+  ctx.lineWidth = 3;
+  for (let i = 0; i < skyline.length; i++) {
+    ctx.beginPath();
+    ctx.fillStyle = mountinesGradient(ctx, 300, addAlpha);
+    const element = skyline[i];
+    ctx.moveTo(element[0], element[1]);
+    ctx.lineTo(element[0] + element[1], 0);
+    ctx.lineTo(element[0] - element[1], 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 const generateSkyline = (width, height) => {
   // Generate mountains
-  let nodes = [[0.0, 0.0]];
-  let stepsCount = random.range(10, 15);
-  let step = width / (stepsCount + 2);
+  let nodes = [];
+  let stepsCount = random.range(7, 11);
+  let step = width / stepsCount;
   for (let index = 1; index <= stepsCount; index++) {
-    let x = step * index;
-    // let y = random.noise1D(index); // get value
+    let x = step * index + 50 - random.gaussian() ; 25;
     let y = random.gaussian();
     y *= 85; // add amplitude
     y = y - (Math.sqrt(width * 0.5 * width * 0.5 - (x - width * 0.5) * (x - width * 0.5))) * 0.5; // correct height to be higher closer to center
     y = y * -Math.sign(y);
     nodes.push([x, y]);
   }
-  nodes.push([width, 0.0]);
   return nodes;
 };
 
-const drawSkyline = (ctx, skyline) => {
-  ctx.translate(0, skylineInterval);
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  for (let i = 0; i < skyline.length; i++) {
-    const element = skyline[i];
-    ctx.lineTo(element[0], element[1]);
-  }
-  ctx.closePath();
-  ctx.fill();
-}
-
 const drawLand = (ctx, time, width, height) => {
-  let skylineGrad = ctx.createLinearGradient(0, 0, 0, -300);
-  skylineGrad.addColorStop(0, '#bbd3de');
-  skylineGrad.addColorStop(1, '#487da7');
-
-  if (skylines.length == 0) {
-    skylines = [...Array(10)].map(() => {
-      return generateSkyline(width, height);
-    });
-  }
-  skylineStep += 1;
-  if (skylineStep >= skylineInterval) {
-    skylines.unshift(generateSkyline(width, height));
-    skylineStep = 0;
+  if (params.animate) {
+    skylineStep += (params.skylineSpeed * params.timeAcceleration);
+    if (skylineStep >= params.skylineInterval) {
+      skylines.unshift(generateSkyline(width, height));
+      skylineStep = 0;
+      skylines = skylines.slice(0, skylinesCount);
+    }
   }
 
   ctx.save();
   ctx.translate(0, cy);
   ctx.translate(0, -skylineStep);
-  ctx.fillStyle = skylineGrad;
-  ctx.globalAlpha = math.mapRange(skylineStep, 0, skylineInterval, 0, 1);
-  drawSkyline(ctx, skylines[0]);
+  drawSkyline(ctx, skylines[0], false);
   ctx.restore();
   
   ctx.save();
@@ -241,15 +239,25 @@ const drawLand = (ctx, time, width, height) => {
   ctx.restore();
 
   ctx.save();
-  ctx.translate(0, cy - skylineInterval);
+  ctx.translate(0, cy - params.skylineInterval);
   ctx.translate(0, skylineStep);
-  ctx.fillStyle = skylineGrad;
   for (let sl = 1; sl < skylines.length; sl++) {
     ctx.globalAlpha = 1;
     const skyline = skylines[sl];
-    drawSkyline(ctx, skyline);
+    drawSkyline(ctx, skyline, false);
     }
   ctx.restore();
+};
+
+const mountinesGradient = (ctx, height, addAlpha) => {
+  let skylineGrad = ctx.createLinearGradient(0, 0, 0, -height);
+  skylineGrad.addColorStop(0, '#bbd3de');
+  skylineGrad.addColorStop(1, '#26465e');
+  ctx.fillStyle = skylineGrad;
+  if (addAlpha) {
+    ctx.globalAlpha = math.mapRange(skylineStep, 0, params.skylineInterval, 0, 1);
+  }
+  return skylineGrad;
 };
 
 const drawDebugData = (ctx, time, width, height) => {
