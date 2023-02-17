@@ -101,7 +101,7 @@ const sketch = ({ context: ctx, width, height }) => {
   cy = height * 0.5;
 
   skylines = [...Array(10)].map(() => {
-    return generateSkyline(width, height);
+    return generateSkyline(cx, height);
   });
 
   return ({ context: ctx, width, height }) => {
@@ -189,9 +189,9 @@ const drawSkyline = (ctx, skyline, addAlpha) => {
   ctx.translate(0, params.skylineInterval);
   ctx.lineWidth = 3;
   for (let i = 0; i < skyline.length; i++) {
-    ctx.beginPath();
-    ctx.fillStyle = mountinesGradient(ctx, 300, addAlpha);
     const element = skyline[i];
+    ctx.beginPath();
+    ctx.fillStyle = mountinesGradient(ctx, element[1]);
     ctx.moveTo(element[0], element[1]);
     ctx.lineTo(element[0] + element[1], 0);
     ctx.lineTo(element[0] - element[1], 0);
@@ -200,16 +200,16 @@ const drawSkyline = (ctx, skyline, addAlpha) => {
   }
 }
 
-const generateSkyline = (width, height) => {
+const generateSkyline = (cx, height) => {
   // Generate mountains
   let nodes = [];
   let stepsCount = random.range(7, 11);
-  let step = width / stepsCount;
+  let step = cx * 2 / stepsCount;
   for (let index = 1; index <= stepsCount; index++) {
-    let x = step * index + 50 - random.gaussian() ; 25;
+    let x = step * index + 50 - random.gaussian();
     let y = random.gaussian();
     y *= 85; // add amplitude
-    y = y - (Math.sqrt(width * 0.5 * width * 0.5 - (x - width * 0.5) * (x - width * 0.5))) * 0.5; // correct height to be higher closer to center
+    y = y - (Math.sqrt(Math.abs(cx * cx - (x - cx) * (x - cx)))) * 0.5; // correct height to be higher closer to center
     y = y * -Math.sign(y);
     nodes.push([x, y]);
   }
@@ -220,7 +220,7 @@ const drawLand = (ctx, time, width, height) => {
   if (params.animate) {
     skylineStep += (params.skylineSpeed * params.timeAcceleration);
     if (skylineStep >= params.skylineInterval) {
-      skylines.unshift(generateSkyline(width, height));
+      skylines.unshift(generateSkyline(width*0.5, height));
       skylineStep = 0;
       skylines = skylines.slice(0, skylinesCount);
     }
@@ -249,14 +249,11 @@ const drawLand = (ctx, time, width, height) => {
   ctx.restore();
 };
 
-const mountinesGradient = (ctx, height, addAlpha) => {
-  let skylineGrad = ctx.createLinearGradient(0, 0, 0, -height);
+const mountinesGradient = (ctx, height) => {
+  let skylineGrad = ctx.createLinearGradient(0, 0, 0, -300);
   skylineGrad.addColorStop(0, '#bbd3de');
   skylineGrad.addColorStop(1, '#26465e');
   ctx.fillStyle = skylineGrad;
-  if (addAlpha) {
-    ctx.globalAlpha = math.mapRange(skylineStep, 0, params.skylineInterval, 0, 1);
-  }
   return skylineGrad;
 };
 
