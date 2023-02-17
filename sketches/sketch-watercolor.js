@@ -4,25 +4,30 @@ const random = require('canvas-sketch-util/random');
 
 const settings = {
   dimensions: [ 1080, 720 ],
-  // animate: true,
+  fps: 1,
+  animate: true,
 };
 
 // Main context
 let ctx;
-// Main color
 let brushOpacity = 0.1;
+// Main color
 let mainColorComponents = [random.range(0, 255), random.range(0, 255), random.range(0, 255)];
 let mainColor = `rgb(${mainColorComponents[0]}, ${mainColorComponents[1]}, ${mainColorComponents[2]}, ${brushOpacity})`;
-// Array of objects with position, size, color and rotation
+// Secondary color
+let secondaryColorComponents = [random.range(0, 255), random.range(0, 255), random.range(0, 255)];
+let secondaryColor = `rgb(${secondaryColorComponents[0]}, ${secondaryColorComponents[1]}, ${secondaryColorComponents[2]}, ${brushOpacity})`;
+let enableBlur = true;
+let enableDrawing = false;
+// Array of drawn objects with position, size, color and rotation
 const objects = [];
-let blur = true;
 
 // Function draw a circle filled with the texture on a given context
 function drawTexturedCircle(baseCtx) {
   // Draw a circle at random position
-  let radius = random.range(100, 200);
-  let x = random.range(radius * 2, ctx.canvas.width - radius * 2);
-  let y = random.range(radius * 2, ctx.canvas.height - radius * 2);
+  let radius = 200;
+  let x = ctx.canvas.width * 0.5;
+  let y = ctx.canvas.height * 0.5;
   // Create a new canvas
   const textureCanvas = document.createElement('canvas');
   textureCanvas.width = radius * 2 * 1.1;
@@ -30,18 +35,22 @@ function drawTexturedCircle(baseCtx) {
   const textureContext = textureCanvas.getContext('2d');
   // Create array of random objects
   let objects = [];
-  for (let i = 0; i < radius; i++) {
+  for (let i = 0; i < radius * 2; i++) {
     let x = random.range(0, textureCanvas.width);
     let y = random.range(0, textureCanvas.height);
     objects.push(createObject(x, y));
   }
   // Fill in the canvas with objects
-  objects.forEach((object) => {
-    drawCircle(textureContext, object);
+  objects.forEach((object, index) => {
+    let color = object.colors[0];
+    if (index > objects.length * 4 / 5) {
+      color = object.colors[1];
+    }
+    drawCircle(textureContext, object, color);
   });
   // Draw a circle
   baseCtx.beginPath();
-  baseCtx.translate(x, y);
+  baseCtx.translate(x - radius, y - radius);
   baseCtx.arc(radius, radius, radius, 0, Math.PI * 2);
   baseCtx.closePath();
   baseCtx.fillStyle = baseCtx.createPattern(textureCanvas, 'no-repeat');
@@ -57,13 +66,15 @@ document.addEventListener('click', (e) => {
   if (x > 10 && x < 60 && y > 10 && y < 60) {
     mainColorComponents = [random.range(0, 255), random.range(0, 255), random.range(0, 255)];
     mainColor = `rgb(${mainColorComponents[0]}, ${mainColorComponents[1]}, ${mainColorComponents[2]}, ${brushOpacity})`;
+    secondaryColorComponents = [random.range(0, 255), random.range(0, 255), random.range(0, 255)];
+    secondaryColor = `rgb(${secondaryColorComponents[0]}, ${secondaryColorComponents[1]}, ${secondaryColorComponents[2]}, ${brushOpacity})`;
   }
 });
 
 // Randomize mainColor
-function randomizeMainColor() {
+function randomizeColor(colorComponents) {
   let extraColorComponents = [random.range(-25, 25), random.range(-25, 25), random.range(-25, 25)];
-  return `rgb(${mainColorComponents[0] + extraColorComponents[0]}, ${mainColorComponents[1] + extraColorComponents[1]}, ${mainColorComponents[2] + extraColorComponents[2]}, ${brushOpacity})`;
+  return `rgb(${colorComponents[0] + extraColorComponents[0]}, ${colorComponents[1] + extraColorComponents[1]}, ${colorComponents[2] + extraColorComponents[2]}, ${brushOpacity})`;
 };
 
 // Get mouse position on mousemove relative to canvas
@@ -82,7 +93,7 @@ function createObject(x, y) {
     x: x,
     y: y,
     radiuses: Array.from({ length: random.range(5, 10) }, () => random.range(60, 80)),
-    color: randomizeMainColor(),
+    colors: [randomizeColor(mainColorComponents), randomizeColor(secondaryColorComponents)],
     rotation: random.range(0, Math.PI * 2)
   };
 }
@@ -95,10 +106,11 @@ const sketch = ({ context, width, height }) => {
     ctx.fillStyle = mainColor;
     ctx.fillRect(10, 10, 60, 60);
 
-    objects.forEach ((object) => {
-      drawCircle(ctx, object);
-    });
-
+    if (enableDrawing) {
+      objects.forEach ((object) => {
+        drawCircle(ctx, object);
+      });
+    }
     drawTexturedCircle(ctx);
   };
 };
@@ -106,13 +118,12 @@ const sketch = ({ context, width, height }) => {
 canvasSketch(sketch, settings);
 
 // Draw a circle plotting the vertices on circumference
-function drawCircle(ctx, object) {
+function drawCircle(ctx, object, color) {
   ctx.save();
   ctx.translate(object.x, object.y);
   ctx.rotate(object.rotation);
-  if (blur) {
-    ctx.filter = 'blur(5px)';
-  }
+  ctx.filter = 'blur(5px)';
+
   ctx.beginPath();
   for (let i = 0; i < object.radiuses.length; i++) {
     let angle = i * Math.PI * 2 / object.radiuses.length;
@@ -126,7 +137,7 @@ function drawCircle(ctx, object) {
     }
   }
   ctx.closePath();
-  ctx.fillStyle = object.color;
+  ctx.fillStyle = color;
   ctx.strokeStyle = 'black';
   ctx.fill();
   ctx.restore();
